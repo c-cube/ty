@@ -5,7 +5,7 @@
 type 'a ty =
   | Int : int ty
   | Bool : bool ty
-  | Sum : 's sum -> 's ty
+  | Sum : ('s, 'v) sum -> 's ty
   | Record : ('r, 'fields) record -> 'r ty
   | Tuple : ('t, 'a) tuple -> 't ty
 
@@ -19,22 +19,27 @@ and 'a ty_list =
   | TCons : 'a ty * 'b ty_list -> ('a * 'b) ty_list
 
 (** Sum type ['s] *)
-and 's sum = {
+and ('s, 'v) sum = {
   sum_name : string;
-  sum_variants : 's variant_list;
+  sum_variants : ('s, 'v) variant_list;
+  sum_match : 'ret. ('s, 'v, 'ret) variant_match -> 's -> 'ret;
 }
 
 (** List of variants for the sum type ['s] *)
-and 's variant_list =
-  | VNil : 's variant_list
-  | VCons : string * ('s, 'a) variant * 's variant_list -> 's variant_list
+and ('s, 'v) variant_list =
+  | VNil : ('s, unit) variant_list
+  | VCons : ('s, 'a) variant * ('s, 'b) variant_list -> ('s, 'a * 'b) variant_list
+
+(** Pattern matching encoding on sums *)
+and ('s, 'v, 'ret) variant_match =
+  | VM_nil : ('s, unit, 'ret) variant_match
+  | VM_cons : ('a hlist -> 'ret) * ('s, 'b, 'ret) variant_match -> ('s, 'a * 'b, 'ret) variant_match
 
 (** A variant of the sum type ['s] *)
 and ('s, 'a) variant = {
   variant_name : string;
   variant_args : 'a ty_list;
   variant_make : 'a hlist -> 's;
-  variant_get : 's -> 'a hlist option;  (* projection *)
 }
 
 (** Description of record of type ['r] with fields ['fields] *)

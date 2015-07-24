@@ -3,21 +3,21 @@
 
 (** {1 Representation of OCaml types *)
 
-(** Description of type ['a] *)
-type 'a ty =
-  | Int : int ty
-  | Bool : bool ty
-  | Sum : 's sum -> 's ty
-  | Record : ('r, 'fields) record -> 'r ty
-  | Tuple : ('t, 'a) tuple -> 't ty
-
 (* TODO: reflect ppx attributes (or manually set attributes) in types!
    required for customization. List of possible attributes:
-     
+
     - ty.opaque         (* for printing *)
     - ty.bimap (f, f')  (* where f : 'a -> 'b, f' : 'b -> 'a *)
     - ty.optional       (* on option types *)
     *)
+
+(** Description of type ['a] *)
+type 'a ty =
+  | Int : int ty
+  | Bool : bool ty
+  | Sum : ('s, 'v) sum -> 's ty
+  | Record : ('r, 'fields) record -> 'r ty
+  | Tuple : ('t, 'a) tuple -> 't ty
 
 and 'a hlist =
   | HNil : unit hlist
@@ -29,22 +29,27 @@ and 'a ty_list =
   | TCons : 'a ty * 'b ty_list -> ('a * 'b) ty_list
 
 (** Sum type ['s] *)
-and 's sum = {
+and ('s, 'v) sum = {
   sum_name : string;
-  sum_variants : 's variant_list;
+  sum_variants : ('s, 'v) variant_list;
+  sum_match : 'ret. ('s, 'v, 'ret) variant_match -> 's -> 'ret;
 }
 
 (** List of variants for the sum type ['s] *)
-and 's variant_list =
-  | VNil : 's variant_list
-  | VCons : string * ('s, 'a) variant * 's variant_list -> 's variant_list
+and ('s, 'v) variant_list =
+  | VNil : ('s, unit) variant_list
+  | VCons : ('s, 'a) variant * ('s, 'b) variant_list -> ('s, 'a * 'b) variant_list
+
+(** Pattern matching encoding on sums *)
+and ('s, 'v, 'ret) variant_match =
+  | VM_nil : ('s, unit, 'ret) variant_match
+  | VM_cons : ('a hlist -> 'ret) * ('s, 'b, 'ret) variant_match -> ('s, 'a * 'b, 'ret) variant_match
 
 (** A variant of the sum type ['s] *)
 and ('s, 'a) variant = {
   variant_name : string;
   variant_args : 'a ty_list;
   variant_make : 'a hlist -> 's;
-  variant_get : 's -> 'a hlist option;  (* projection *)
 }
 
 (** Description of record of type ['r] with fields ['fields] *)
@@ -89,7 +94,20 @@ let rec print : type a. a ty -> fmt -> a -> unit
   | Record r ->
       Format.fprintf out "@[<hov>{%a}@]"
         (print_fields ~n:0 r.record_args) x
-  | Sum s -> assert false (* TODO *)
+  | Sum s ->
+      let rec cases : type v. (a, v) variant_list -> (a, v, unit) variant_match
+        = function
+        | VNil -> VM_nil
+        | VCons (v, tail) ->
+            let pp_case args = match v.variant_args with
+              | TNil -> Format.fprintf out "%s" v.variant_name
+              | _ ->
+                Format.fprintf out "@[<hov>%s@ (%a)@]" v.variant_name
+                  (print_hlist ~sep:", " ~n:0 v.variant_args) args
+            in
+            VM_cons (pp_case, cases tail)
+      in
+      s.sum_match (cases s.sum_variants) x
 
 and print_hlist : type l. sep:string -> n:int -> l ty_list -> fmt -> l hlist -> unit
   = fun ~sep ~n tyl out l ->

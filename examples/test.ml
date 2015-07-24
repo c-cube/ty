@@ -28,7 +28,7 @@ type point = {
   color: color;
 }
 
-let ty_point = Ty.(
+let ty_point : point Ty.ty = Ty.(
   let f_x = mk_field "x" ~ty:Int ~get:(fun r->r.x) in
   let f_y = mk_field "y" ~ty:Int ~get:(fun r->r.y) in
   let f_c = mk_field "color" ~ty:ty_color ~get:(fun r->r.color) in
@@ -46,3 +46,21 @@ let () =
     ; {x=0; y=42; color=Blue }
     ]
 
+
+(* Testing induction *)
+
+type nat = O | S of nat
+
+let ty_nat = Ty.(
+  let v_O = mk_variant "O" ~args:TNil ~make:(fun HNil -> O) in
+  let v_S = mk_variant "O" ~args:(TCons (Rec,TNil)) ~make:(fun (HCons (n,HNil)) -> S n) in
+  Sum {
+    sum_name="nat";
+    sum_variants=VCons (v_O, VCons (v_S, VNil));
+    sum_match=fun
+      (VM_cons (f_O, VM_cons (f_S, VM_nil))) v ->
+        match v with
+        | O -> f_O HNil
+        | S n -> f_S (HCons(n,HNil))
+  }
+)

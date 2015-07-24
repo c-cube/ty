@@ -12,64 +12,65 @@
     *)
 
 (** Description of type ['a] *)
-type 'a ty =
-  | Unit : unit ty
-  | Int : int ty
-  | Bool : bool ty
-  | List : 'a ty -> 'a list ty
-  | Sum : ('s, 'v) sum -> 's ty
-  | Record : ('r, 'fields) record -> 'r ty
-  | Tuple : ('t, 'a) tuple -> 't ty
-  | Lazy : 'a ty -> 'a Lazy.t ty
-  | Fun : 'a ty * 'b ty -> ('a -> 'b) ty
+type ('a,'x) rty =
+  | Rec : ('x,'x) rty
+  | Unit : (unit,'x) rty
+  | Int : (int,'x) rty
+  | Bool : (bool,'x) rty
+  | List : ('a,'x) rty -> ('a list,'x) rty
+  | Sum : ('s, 'v, 'x) sum -> ('s,'x) rty
+  | Record : ('r, 'fields, 'x) record -> ('r,'x) rty
+  | Tuple : ('t, 'a, 'x) tuple -> ('t,'x) rty
+  | Lazy : ('a,'x) rty -> ('a Lazy.t,'x) rty
+  | Fun : ('a,'x) rty * ('b,'x) rty -> ('a -> 'b, 'x) rty
 
 and 'a hlist =
   | HNil : unit hlist
   | HCons : 'a * 'b hlist -> ('a * 'b) hlist
 
 (** Description of list of types *)
-and 'a ty_list =
-  | TNil : unit ty_list
-  | TCons : 'a ty * 'b ty_list -> ('a * 'b) ty_list
+and ('a,'x) ty_list =
+  | TNil : (unit,'x) ty_list
+  | TCons : ('a,'x) rty * ('b,'x) ty_list -> ('a * 'b,'x) ty_list
 
 (** Sum type ['s] *)
-and ('s, 'v) sum = {
+and ('s, 'v, 'x) sum = {
   sum_name : string;
-  sum_variants : ('s, 'v) variant_list;
-  sum_match : 'ret. ('s, 'v, 'ret) variant_match -> 's -> 'ret;
+  sum_variants : ('s, 'v, 'x) variant_list;
+  sum_match : 'ret. ('s, 'v, 'x, 'ret) variant_match -> 's -> 'ret;
 }
 
 (** List of variants for the sum type ['s] *)
-and ('s, 'v) variant_list =
-  | VNil : ('s, unit) variant_list
-  | VCons : ('s, 'a) variant * ('s, 'b) variant_list -> ('s, 'a * 'b) variant_list
+and ('s, 'v, 'x) variant_list =
+  | VNil : ('s, unit, 'x) variant_list
+  | VCons : ('s, 'a, 'x) variant * ('s, 'b, 'x) variant_list -> ('s, 'a * 'b, 'x) variant_list
 
 (** Pattern matching encoding on sums *)
-and ('s, 'v, 'ret) variant_match =
-  | VM_nil : ('s, unit, 'ret) variant_match
-  | VM_cons : ('a hlist -> 'ret) * ('s, 'b, 'ret) variant_match -> ('s, 'a * 'b, 'ret) variant_match
+and ('s, 'v, 'x, 'ret) variant_match =
+  | VM_nil : ('s, unit, 'x, 'ret) variant_match
+  | VM_cons : ('a hlist -> 'ret) * ('s, 'b, 'x, 'ret) variant_match -> ('s, 'a * 'b, 'x, 'ret) variant_match
 
 (** A variant of the sum type ['s] *)
-and ('s, 'a) variant = {
+and ('s, 'a, 'x) variant = {
   variant_name : string;
-  variant_args : 'a ty_list;
+  variant_args : ('a,'x) ty_list;
   variant_make : 'a hlist -> 's;
 }
 
 (** Description of record of type ['r] with fields ['fields] *)
-and ('r, 'fields) record = {
+and ('r, 'fields, 'x) record = {
   record_name : string;
-  record_args : ('r, 'fields) field_list;
+  record_args : ('r, 'fields, 'x) field_list;
   record_make : 'fields hlist -> 'r;  (* build record *)
 }
 
-and (_, _) field_list =
-  | RNil : ('r, unit) field_list
-  | RCons : ('r, 'a) field * ('r, 'b) field_list -> ('r, 'a * 'b) field_list
+and (_, _, _) field_list =
+  | RNil : ('r, unit, 'x) field_list
+  | RCons : ('r, 'a, 'x) field * ('r, 'b, 'x) field_list -> ('r, 'a * 'b, 'x) field_list
 
-and ('r, 'a) field = {
+and ('r, 'a, 'x) field = {
   field_name : string;
-  field_ty : 'a ty;
+  field_ty : ('a,'x) rty;
   field_get : 'r -> 'a;
   field_set : ('a -> 'r) option; (* None if field immutable *)
 }
@@ -78,11 +79,13 @@ and ('r, 'a) field = {
     For instance we would have
     [((int * bool * float), (int * (bool * (float * unit)))) tuple]
 *)
-and ('t, 'a) tuple = {
-  tuple_args : 'a ty_list;
+and ('t, 'a, 'x) tuple = {
+  tuple_args : ('a,'x) ty_list;
   tuple_get : 't -> 'a hlist;
   tuple_make : 'a hlist -> 't;
 }
+
+type 'a ty = ('a,'a) rty
 
 (** {2 Helpers} *)
 
@@ -154,8 +157,9 @@ let pp_list ?(sep=", ") pp_item out l =
   in
   print l
 
-let rec print : type a. a ty -> fmt -> a -> unit
+let rec print : type a x. (a,x) rty -> fmt -> a -> unit
   = fun ty out x -> match ty with
+  | Rec -> assert false (* TODO *)
   | Unit -> Format.fprintf out "()"
   | Int -> Format.fprintf out "%d" x
   | Bool ->  Format.fprintf out "%B" x
@@ -170,7 +174,7 @@ let rec print : type a. a ty -> fmt -> a -> unit
       Format.fprintf out "@[<hov>{%a}@]"
         (print_fields ~n:0 r.record_args) x
   | Sum s ->
-      let rec cases : type v. (a, v) variant_list -> (a, v, unit) variant_match
+      let rec cases : type v. (a, v,_) variant_list -> (a, v, _, unit) variant_match
         = function
         | VNil -> VM_nil
         | VCons (v, tail) ->
@@ -184,7 +188,7 @@ let rec print : type a. a ty -> fmt -> a -> unit
       in
       s.sum_match (cases s.sum_variants) x
 
-and print_hlist : type l. sep:string -> n:int -> l ty_list -> fmt -> l hlist -> unit
+and print_hlist : type l x. sep:string -> n:int -> (l,x) ty_list -> fmt -> l hlist -> unit
   = fun ~sep ~n tyl out l ->
   match tyl, l with
   | TNil, HNil  -> ()
@@ -193,7 +197,7 @@ and print_hlist : type l. sep:string -> n:int -> l ty_list -> fmt -> l hlist -> 
       print ty out x;
       print_hlist ~sep ~n:(n+1) tyl' out l'
 
-and print_fields : type r f. n:int -> (r, f) field_list -> fmt -> r -> unit
+and print_fields : type r f x. n:int -> (r, f,x) field_list -> fmt -> r -> unit
   = fun ~n l out r -> match l with
   | RNil -> ()
   | RCons (field, l') ->

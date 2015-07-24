@@ -20,6 +20,8 @@ type 'a ty =
   | Sum : ('s, 'v) sum -> 's ty
   | Record : ('r, 'fields) record -> 'r ty
   | Tuple : ('t, 'a) tuple -> 't ty
+  | Lazy : 'a ty -> 'a Lazy.t ty
+  | Fun : 'a ty * 'b ty -> ('a -> 'b) ty
 
 and 'a hlist =
   | HNil : unit hlist
@@ -69,6 +71,7 @@ and ('r, 'a) field = {
   field_name : string;
   field_ty : 'a ty;
   field_get : 'r -> 'a;
+  field_set : ('a -> 'r) option; (* None if field immutable *)
 }
 
 (** A tuple of type ['t], where ['a] is the nested version of ['t].
@@ -83,16 +86,31 @@ and ('t, 'a) tuple = {
 
 (** {2 Helpers} *)
 
+let mk_field ?set name ~ty ~get = {
+  field_name=name;
+  field_ty=ty;
+  field_get=get;
+  field_set=set
+}
+
+let mk_variant name ~args ~make = {
+  variant_name=name;
+  variant_args=args;
+  variant_make=make;
+}
+
 let int = Int
 let bool = Bool
 let unit = Unit
+let lazy_ x = Lazy x
 
 let option x = Sum {
   sum_name="option";
   sum_variants= (
-    let v_none = {variant_name="None"; variant_args=TNil; variant_make=fun HNil -> None} in
-    let v_some = {variant_name="Some"; variant_args=TCons (x, TNil);
-                  variant_make=fun (HCons (x, HNil)) -> Some x} in
+    let v_none = mk_variant "None" ~args:TNil ~make:(fun HNil -> None) in
+    let v_some = mk_variant "Some" ~args:(TCons (x, TNil))
+      ~make:(fun (HCons (x, HNil)) -> Some x)
+    in
     VCons (v_none, VCons (v_some, VNil))
   );
   sum_match=fun (VM_cons (f_none, VM_cons (f_some, VM_nil))) v ->
@@ -113,6 +131,12 @@ let triple a b c = Tuple {
   tuple_args=TCons (a, TCons (b, TCons (c, TNil)));
   tuple_get = (fun (x,y,z) -> HCons (x, HCons (y, HCons (z, HNil))));
   tuple_make = (fun (HCons (x, HCons (y, HCons (z, HNil)))) -> x,y,z);
+}
+
+let ref ty = Record {
+  record_name = "ref";
+  record_args = RCons (mk_field "contents" ~ty ~get:(!), RNil);
+  record_make = (fun (HCons (x, HNil)) -> ref x);
 }
 
 (* PRINT *)
@@ -136,6 +160,8 @@ let rec print : type a. a ty -> fmt -> a -> unit
   | Int -> Format.fprintf out "%d" x
   | Bool ->  Format.fprintf out "%B" x
   | List ty -> Format.fprintf out "@[<hov>[%a]@]" (pp_list ~sep:"; " (print ty)) x
+  | Lazy ty -> Format.fprintf out "lazy %a" (print ty) (Lazy.force x)
+  | Fun (_, _) -> Format.fprintf out "<fun>"
   | Tuple tup ->
       Format.fprintf out "@[<hov>(%a)@]"
         (print_hlist ~sep:", " ~n:0 tup.tuple_args)

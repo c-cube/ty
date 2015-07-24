@@ -10,6 +10,8 @@ type 'a ty =
   | Sum : ('s, 'v) sum -> 's ty
   | Record : ('r, 'fields) record -> 'r ty
   | Tuple : ('t, 'a) tuple -> 't ty
+  | Lazy : 'a ty -> 'a Lazy.t ty
+  | Fun : 'a ty * 'b ty -> ('a -> 'b) ty
 
 and 'a hlist =
   | HNil : unit hlist
@@ -59,6 +61,7 @@ and ('r, 'a) field = {
   field_name : string;
   field_ty : 'a ty;
   field_get : 'r -> 'a;
+  field_set : ('a -> 'r) option; (* None if field immutable *)
 }
 
 (** A tuple of type ['t], where ['a] is the nested version of ['t].
@@ -73,11 +76,16 @@ and ('t, 'a) tuple = {
 
 (** {2 Helpers} *)
 
+val mk_field : ?set:('a -> 'r) -> string -> ty:'a ty -> get:('r -> 'a) -> ('r, 'a) field
+val mk_variant : string -> args:'a ty_list -> make:('a hlist -> 's) -> ('s, 'a) variant
+
 val int : int ty
 val bool : bool ty
 val unit : unit ty
 val option : 'a ty -> 'a option ty
 val list : 'a ty -> 'a list ty
+val lazy_ : 'a ty -> 'a Lazy.t ty
+val ref : 'a ty -> 'a ref ty
 
 val pair : 'a ty -> 'b ty -> ('a * 'b) ty
 val triple : 'a ty -> 'b ty -> 'c ty -> ('a * 'b * 'c) ty

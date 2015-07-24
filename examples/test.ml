@@ -7,9 +7,9 @@ type color =
   | Green
 
 let ty_color = Ty.(
-  let v_red = {variant_name="red"; variant_args=TNil; variant_make=fun HNil -> Red} in
-  let v_blue = {variant_name="blue"; variant_args=TNil; variant_make=fun HNil -> Blue} in
-  let v_green = {variant_name="green"; variant_args=TNil; variant_make=fun HNil -> Green} in
+  let v_red = mk_variant "Red" ~args:TNil ~make:(fun HNil -> Red) in
+  let v_blue = mk_variant "Blue" ~args:TNil ~make:(fun HNil -> Blue) in
+  let v_green= mk_variant "Green" ~args:TNil ~make:(fun HNil -> Green) in
   Sum {
     sum_name="color";
     sum_variants=VCons (v_red, VCons (v_blue, VCons (v_green, VNil)));
@@ -29,9 +29,9 @@ type point = {
 }
 
 let ty_point = Ty.(
-  let f_x = {field_name = "x"; field_ty = Int; field_get = fun r->r.x} in
-  let f_y = {field_name = "y"; field_ty = Int; field_get = fun r->r.y} in
-  let f_c = {field_name = "color"; field_ty = ty_color; field_get = fun r->r.color} in
+  let f_x = mk_field "x" ~ty:Int ~get:(fun r->r.x) in
+  let f_y = mk_field "y" ~ty:Int ~get:(fun r->r.y) in
+  let f_c = mk_field "color" ~ty:ty_color ~get:(fun r->r.color) in
   Record {
     record_name = "point";
     record_args = RCons (f_x, RCons (f_y, RCons (f_c, RNil)));

@@ -3,8 +3,10 @@
 
 (** Description of type ['a] *)
 type 'a ty =
+  | Unit : unit ty
   | Int : int ty
   | Bool : bool ty
+  | List : 'a ty -> 'a list ty
   | Sum : ('s, 'v) sum -> 's ty
   | Record : ('r, 'fields) record -> 'r ty
   | Tuple : ('t, 'a) tuple -> 't ty
@@ -68,6 +70,17 @@ and ('t, 'a) tuple = {
   tuple_get : 't -> 'a hlist;
   tuple_make : 'a hlist -> 't;
 }
+
+(** {2 Helpers} *)
+
+val int : int ty
+val bool : bool ty
+val unit : unit ty
+val option : 'a ty -> 'a option ty
+val list : 'a ty -> 'a list ty
+
+val pair : 'a ty -> 'b ty -> ('a * 'b) ty
+val triple : 'a ty -> 'b ty -> 'c ty -> ('a * 'b * 'c) ty
 
 (** {2 Generic functions} *)
 

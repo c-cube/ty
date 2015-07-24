@@ -13,8 +13,10 @@
 
 (** Description of type ['a] *)
 type 'a ty =
+  | Unit : unit ty
   | Int : int ty
   | Bool : bool ty
+  | List : 'a ty -> 'a list ty
   | Sum : ('s, 'v) sum -> 's ty
   | Record : ('r, 'fields) record -> 'r ty
   | Tuple : ('t, 'a) tuple -> 't ty
@@ -79,14 +81,61 @@ and ('t, 'a) tuple = {
   tuple_make : 'a hlist -> 't;
 }
 
+(** {2 Helpers} *)
+
+let int = Int
+let bool = Bool
+let unit = Unit
+
+let option x = Sum {
+  sum_name="option";
+  sum_variants= (
+    let v_none = {variant_name="None"; variant_args=TNil; variant_make=fun HNil -> None} in
+    let v_some = {variant_name="Some"; variant_args=TCons (x, TNil);
+                  variant_make=fun (HCons (x, HNil)) -> Some x} in
+    VCons (v_none, VCons (v_some, VNil))
+  );
+  sum_match=fun (VM_cons (f_none, VM_cons (f_some, VM_nil))) v ->
+    match v with
+    | None -> f_none HNil
+    | Some x -> f_some (HCons (x, HNil))
+}
+
+let list x = List x
+
+let pair a b = Tuple {
+  tuple_args=TCons (a, TCons (b, TNil));
+  tuple_get = (fun (x,y) -> HCons (x, HCons (y, HNil)));
+  tuple_make = (fun (HCons (x, HCons (y, HNil))) -> x,y);
+}
+
+let triple a b c = Tuple {
+  tuple_args=TCons (a, TCons (b, TCons (c, TNil)));
+  tuple_get = (fun (x,y,z) -> HCons (x, HCons (y, HCons (z, HNil))));
+  tuple_make = (fun (HCons (x, HCons (y, HCons (z, HNil)))) -> x,y,z);
+}
+
 (* PRINT *)
 
 type fmt = Format.formatter
 
+let pp_list ?(sep=", ") pp_item out l =
+  let rec print l = match l with
+    | x::((_::_) as l) ->
+      pp_item out x;
+      Format.fprintf out "%s@," sep;
+      print l
+    | x::[] -> pp_item out x
+    | [] -> ()
+  in
+  print l
+
 let rec print : type a. a ty -> fmt -> a -> unit
   = fun ty out x -> match ty with
+  | Unit -> Format.fprintf out "()"
   | Int -> Format.fprintf out "%d" x
   | Bool ->  Format.fprintf out "%B" x
+  | List ty -> Format.fprintf out "@[<hov>[%a]@]" (pp_list ~sep:"; " (print ty)) x
   | Tuple tup ->
       Format.fprintf out "@[<hov>(%a)@]"
         (print_hlist ~sep:", " ~n:0 tup.tuple_args)

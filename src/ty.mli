@@ -1,17 +1,24 @@
 
 (** {1 Representation of OCaml types *)
 
+type (_, _) maybe_eq =
+  | Refl : ('a, 'a) maybe_eq
+  | NotEq : ('a, 'b) maybe_eq
+
 (** Description of type ['a] *)
-type 'a ty =
-  | Unit : unit ty
-  | Int : int ty
-  | Bool : bool ty
-  | List : 'a ty -> 'a list ty
-  | Sum : ('s, 'v) sum -> 's ty
-  | Record : ('r, 'fields) record -> 'r ty
-  | Tuple : ('t, 'a) tuple -> 't ty
-  | Lazy : 'a ty -> 'a Lazy.t ty
-  | Fun : 'a ty * 'b ty -> ('a -> 'b) ty
+type 'a ty
+
+(** View of ['a ty] *)
+type 'a view =
+  | Unit : unit view
+  | Int : int view
+  | Bool : bool view
+  | List : 'a ty -> 'a list view
+  | Sum : ('s, 'v) sum -> 's view
+  | Record : ('r, 'fields) record -> 'r view
+  | Tuple : ('t, 'a) tuple -> 't view
+  | Lazy : 'a ty -> 'a Lazy.t view
+  | Fun : 'a ty * 'b ty -> ('a -> 'b) view
 
 and 'a hlist =
   | HNil : unit hlist
@@ -74,6 +81,14 @@ and ('t, 'a) tuple = {
   tuple_make : 'a hlist -> 't;
 }
 
+(** {2 Basic Operations} *)
+
+val view : 'a ty -> 'a view
+(** Deconstruct the head of the ['a ty] *)
+
+val equal : 'a ty -> 'b ty -> ('a, 'b) maybe_eq
+(** Compare two dynamic types *)
+
 (** {2 Helpers} *)
 
 val mk_field : ?set:('a -> 'r) -> string -> ty:'a ty -> get:('r -> 'a) -> ('r, 'a) field
@@ -89,6 +104,25 @@ val ref : 'a ty -> 'a ref ty
 
 val pair : 'a ty -> 'b ty -> ('a * 'b) ty
 val triple : 'a ty -> 'b ty -> 'c ty -> ('a * 'b * 'c) ty
+
+val mk_sum : ('s, _) sum -> 's ty
+val mk_record : ('r, _) record -> 'r ty
+val mk_tuple : ('t, _) tuple -> 't ty
+
+(** {2 Table with ['a ty] keys} *)
+
+module type TABLE = sig
+  type t
+  type 'a value
+
+  val create : ?size:int -> unit -> t
+
+  val get : t -> 'a ty -> 'a value option
+
+  val set : t -> 'a ty -> 'a value -> unit
+end
+
+module MkTable(X : sig type 'a t end) : TABLE with type 'a value = 'a X.t
 
 (** {2 Generic functions} *)
 

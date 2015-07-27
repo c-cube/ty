@@ -10,7 +10,7 @@ let ty_color = Ty.(
   let v_red = mk_variant "Red" ~args:TNil ~make:(fun HNil -> Red) in
   let v_blue = mk_variant "Blue" ~args:TNil ~make:(fun HNil -> Blue) in
   let v_green= mk_variant "Green" ~args:TNil ~make:(fun HNil -> Green) in
-  Sum {
+  mk_sum {
     sum_name="color";
     sum_variants=VCons (v_red, VCons (v_blue, VCons (v_green, VNil)));
     sum_match=fun
@@ -29,10 +29,10 @@ type point = {
 }
 
 let ty_point = Ty.(
-  let f_x = mk_field "x" ~ty:Int ~get:(fun r->r.x) in
-  let f_y = mk_field "y" ~ty:Int ~get:(fun r->r.y) in
+  let f_x = mk_field "x" ~ty:int ~get:(fun r->r.x) in
+  let f_y = mk_field "y" ~ty:int ~get:(fun r->r.y) in
   let f_c = mk_field "color" ~ty:ty_color ~get:(fun r->r.color) in
-  Record {
+  mk_record {
     record_name = "point";
     record_args = RCons (f_x, RCons (f_y, RCons (f_c, RNil)));
     record_make = (fun (HCons (x, HCons (y, HCons (color, HNil)))) -> {x;y;color});

@@ -11,17 +11,39 @@
     - ty.optional       (* on option types *)
     *)
 
+type (_, _) maybe_eq =
+  | Refl : ('a, 'a) maybe_eq
+  | NotEq : ('a, 'b) maybe_eq
+
+module Id : sig
+  type 'a t
+  val fresh : unit -> 'a t
+  val equal : 'a t -> 'b t -> ('a, 'b) maybe_eq
+end = struct
+  type 'a t = int
+  let fresh =
+    let r = ref 0 in
+    fun () -> incr r; !r
+  let equal : type a b. a t -> b t -> (a, b) maybe_eq =
+    fun i j -> if i=j then (Obj.magic Refl : (a, b) maybe_eq) else NotEq
+end
+
 (** Description of type ['a] *)
-type 'a ty =
-  | Unit : unit ty
-  | Int : int ty
-  | Bool : bool ty
-  | List : 'a ty -> 'a list ty
-  | Sum : ('s, 'v) sum -> 's ty
-  | Record : ('r, 'fields) record -> 'r ty
-  | Tuple : ('t, 'a) tuple -> 't ty
-  | Lazy : 'a ty -> 'a Lazy.t ty
-  | Fun : 'a ty * 'b ty -> ('a -> 'b) ty
+type 'a ty = {
+  id: 'a Id.t;
+  view: 'a view;
+}
+
+and 'a view =
+  | Unit : unit view
+  | Int : int view
+  | Bool : bool view
+  | List : 'a ty -> 'a list view
+  | Sum : ('s, 'v) sum -> 's view
+  | Record : ('r, 'fields) record -> 'r view
+  | Tuple : ('t, 'a) tuple -> 't view
+  | Lazy : 'a ty -> 'a Lazy.t view
+  | Fun : 'a ty * 'b ty -> ('a -> 'b) view
 
 and 'a hlist =
   | HNil : unit hlist
@@ -84,6 +106,12 @@ and ('t, 'a) tuple = {
   tuple_make : 'a hlist -> 't;
 }
 
+(** {2 Basic Operations} *)
+
+let view a = a.view
+
+let equal a b = Id.equal a.id b.id
+
 (** {2 Helpers} *)
 
 let mk_field ?set name ~ty ~get = {
@@ -99,12 +127,20 @@ let mk_variant name ~args ~make = {
   variant_make=make;
 }
 
-let int = Int
-let bool = Bool
-let unit = Unit
-let lazy_ x = Lazy x
+let make_ v = {id=Id.fresh(); view=v; }
 
-let option x = Sum {
+let int = make_ Int
+let bool = make_ Bool
+let unit = make_ Unit
+let lazy_ x = make_ (Lazy x)
+
+let list x = make_ (List x)
+
+let mk_sum s = { id=Id.fresh(); view=Sum s }
+let mk_record r = { id=Id.fresh(); view=Record r }
+let mk_tuple t = { id=Id.fresh(); view=Tuple t }
+
+let option x = mk_sum {
   sum_name="option";
   sum_variants= (
     let v_none = mk_variant "None" ~args:TNil ~make:(fun HNil -> None) in
@@ -119,27 +155,73 @@ let option x = Sum {
     | Some x -> f_some (HCons (x, HNil))
 }
 
-let list x = List x
-
-let pair a b = Tuple {
+let pair a b = mk_tuple {
   tuple_args=TCons (a, TCons (b, TNil));
   tuple_get = (fun (x,y) -> HCons (x, HCons (y, HNil)));
   tuple_make = (fun (HCons (x, HCons (y, HNil))) -> x,y);
 }
 
-let triple a b c = Tuple {
+let triple a b c = mk_tuple {
   tuple_args=TCons (a, TCons (b, TCons (c, TNil)));
   tuple_get = (fun (x,y,z) -> HCons (x, HCons (y, HCons (z, HNil))));
   tuple_make = (fun (HCons (x, HCons (y, HCons (z, HNil)))) -> x,y,z);
 }
 
-let ref ty = Record {
+let ref ty = mk_record {
   record_name = "ref";
   record_args = RCons (mk_field "contents" ~ty ~get:(!), RNil);
   record_make = (fun (HCons (x, HNil)) -> ref x);
 }
 
-(* PRINT *)
+(** {2 Table with ['a ty] keys} *)
+
+module type TABLE = sig
+  type t
+  type 'a value
+
+  val create : ?size:int -> unit -> t
+
+  val get : t -> 'a ty -> 'a value option
+
+  val set : t -> 'a ty -> 'a value -> unit
+end
+
+module MkTable(X : sig type 'a t end) = struct
+  type 'a value = 'a X.t
+
+  type wrap_ty = Wrap : 'a ty -> wrap_ty
+  (* hide type param *)
+
+  type wrap_key_val = WrapKV : 'a ty * 'a value -> wrap_key_val
+  (* wrap key ty/value pair *)
+
+  module H = Hashtbl.Make(struct
+    type t = wrap_ty
+    let hash = Hashtbl.hash
+    let equal (Wrap a) (Wrap b) = match Id.equal a.id b.id with
+      | Refl -> true
+      | NotEq -> false
+  end)
+
+  type t = wrap_key_val H.t
+
+  let create ?(size=16) () = H.create size
+
+  let get : type a. t -> a ty -> a value option
+  = fun t x ->
+    try
+      let (WrapKV (ty, v)) = H.find t (Wrap x) in
+      match Id.equal x.id ty.id with
+      | Refl -> Some v
+      | NotEq -> assert false
+    with Not_found -> None
+
+  let set : type a. t -> a ty -> a value -> unit
+  = fun t x v ->
+    H.replace t (Wrap x) (WrapKV (x, v))
+end
+
+(** {2 Generic functions} *)
 
 type fmt = Format.formatter
 
@@ -155,7 +237,7 @@ let pp_list ?(sep=", ") pp_item out l =
   print l
 
 let rec print : type a. a ty -> fmt -> a -> unit
-  = fun ty out x -> match ty with
+  = fun ty out x -> match view ty with
   | Unit -> Format.fprintf out "()"
   | Int -> Format.fprintf out "%d" x
   | Bool ->  Format.fprintf out "%B" x

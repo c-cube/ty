@@ -35,6 +35,7 @@ type 'a ty = {
 }
 
 and 'a view =
+  | Rec : (unit -> 'a ty) -> 'a view
   | Unit : unit view
   | Int : int view
   | Bool : bool view
@@ -139,6 +140,7 @@ let list x = make_ (List x)
 let mk_sum s = { id=Id.fresh(); view=Sum s }
 let mk_record r = { id=Id.fresh(); view=Record r }
 let mk_tuple t = { id=Id.fresh(); view=Tuple t }
+let mk_rec d = { id=Id.fresh(); view=Rec d }
 
 let option x = mk_sum {
   sum_name="option";
@@ -238,6 +240,7 @@ let pp_list ?(sep=", ") pp_item out l =
 
 let rec print : type a. a ty -> fmt -> a -> unit
   = fun ty out x -> match view ty with
+  | Rec dty -> print (dty ()) out x
   | Unit -> Format.fprintf out "()"
   | Int -> Format.fprintf out "%d" x
   | Bool ->  Format.fprintf out "%B" x

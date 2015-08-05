@@ -39,10 +39,34 @@ let ty_point = Ty.(
   }
 )
 
+type nat = O | S of nat
+
+let ty_nat =
+  let rec ty_nat () =
+    let open Ty in
+    let v_o = mk_variant "O" ~args:TNil ~make:(fun HNil -> O) in
+    let v_s = mk_variant "S" ~args:(TCons(Ty.mk_rec ty_nat,TNil)) ~make:(fun (HCons(n,HNil)) -> S n) in
+    mk_sum {
+      sum_name="nat";
+      sum_variants=VCons (v_o, VCons (v_s, VNil));
+      sum_match=fun
+        (VM_cons (f_o, VM_cons (f_s, VM_nil))) v ->
+          match v with
+          | O -> f_o HNil
+          | S n -> f_s (HCons(n,HNil))
+    }
+  in
+  Ty.mk_rec ty_nat
+
 let () =
   List.iter
     (fun p -> Format.printf "point %a@." (Ty.print ty_point) p)
     [ {x=1; y=2; color=Red }
     ; {x=0; y=42; color=Blue }
-    ]
-
+    ];
+  List.iter
+    (fun p -> Format.printf "nat %a@." (Ty.print ty_nat) p)
+    [ O
+    ; S O
+    ; S (S O)
+    ];

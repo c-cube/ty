@@ -10,6 +10,7 @@ type 'a ty
 
 (** View of ['a ty] *)
 type 'a view =
+  | Rec : (unit -> 'a ty) -> 'a view
   | Unit : unit view
   | Int : int view
   | Bool : bool view
@@ -108,6 +109,7 @@ val triple : 'a ty -> 'b ty -> 'c ty -> ('a * 'b * 'c) ty
 val mk_sum : ('s, _) sum -> 's ty
 val mk_record : ('r, _) record -> 'r ty
 val mk_tuple : ('t, _) tuple -> 't ty
+val mk_rec : (unit -> 'a ty) -> 'a ty
 
 (** {2 Table with ['a ty] keys} *)
 

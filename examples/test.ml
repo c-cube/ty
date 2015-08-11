@@ -42,10 +42,10 @@ let ty_point = Ty.(
 type nat = O | S of nat
 
 let ty_nat =
-  let rec ty_nat () =
+  Ty.mk_rec (fun self ->
     let open Ty in
     let v_o = mk_variant "O" ~args:TNil ~make:(fun HNil -> O) in
-    let v_s = mk_variant "S" ~args:(TCons(Ty.mk_rec ty_nat,TNil)) ~make:(fun (HCons(n,HNil)) -> S n) in
+    let v_s = mk_variant "S" ~args:(TCons(self,TNil)) ~make:(fun (HCons(n,HNil)) -> S n) in
     mk_sum {
       sum_name="nat";
       sum_variants=VCons (v_o, VCons (v_s, VNil));
@@ -55,8 +55,11 @@ let ty_nat =
           | O -> f_o HNil
           | S n -> f_s (HCons(n,HNil))
     }
-  in
-  Ty.mk_rec ty_nat
+  )
+
+let rec mk_nat = function
+  | 0 -> O
+  | n -> S (mk_nat (n-1))
 
 let () =
   List.iter
@@ -69,4 +72,5 @@ let () =
     [ O
     ; S O
     ; S (S O)
+    ; mk_nat 10
     ];

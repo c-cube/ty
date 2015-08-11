@@ -166,6 +166,9 @@ let mk_rec d =
   let rec ty = lazy { id=Id.fresh(); view=Rec (lazy (d (Lazy.force ty))); } in
   Lazy.force ty
 
+let mk_sum_rec f = mk_rec (fun self -> mk_sum (f self))
+let mk_record_rec f = mk_rec (fun self -> mk_record (f self))
+
 let option x = make_ (Option x)
 
 let pair a b = mk_tuple {

@@ -1,3 +1,6 @@
 <**/*.ml>: warn_A, warn(-4), warn(-44)
 <src>: include
+<src/ppx>: include
+<src/ppx/*>: package(ppx_deriving.api), package(ppx_tools.metaquot)
 <examples>: include
+<examples/*>: use_ppx_ty

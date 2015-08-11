@@ -22,6 +22,21 @@ let ty_color = Ty.(
   }
 )
 
+type color2 =
+  | Yellow
+  | Cyan
+  | Black of int
+  [@@deriving ty]
+
+let () =
+  List.iter
+    (Format.printf "%a@." (Ty.print ty_color2))
+    [ Yellow
+    ; Cyan
+    ; Black 0
+    ; Black 1
+    ]
+
 type point = {
   x: int;
   y: int;

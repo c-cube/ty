@@ -130,6 +130,11 @@ val mk_record : ('r, _) record -> 'r ty
 val mk_tuple : ('t, _) tuple -> 't ty
 val mk_rec : ('a ty -> 'a ty) -> 'a ty
 
+(* helpers *)
+
+val mk_sum_rec : ('s ty -> ('s, _) sum) -> 's ty
+val mk_record_rec : ('r ty -> ('r, _) record) -> 'r ty
+
 (** {2 Table with ['a ty] keys} *)
 
 module type TABLE = sig

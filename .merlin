@@ -1,4 +1,9 @@
 S src
+S src/ppx
 S examples
 B _build/src
+B _build/src/ppx
 B _build/examples
+PKG ppx_deriving.api
+PKG ppx_tools.metaquot
+FLG -w +a -w -4 -w -44

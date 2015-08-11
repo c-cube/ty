@@ -43,7 +43,10 @@ and 'a view =
   | Int64 : int64 view
   | Nativeint : nativeint view
   | Float : float view
+  | Char : char view
   | Option : 'a ty -> 'a option view
+  | String : string view
+  | Bytes : bytes view
   | List : 'a ty -> 'a list view
   | Array : 'a ty -> 'a array view
   | Sum : ('s, 'v) sum -> 's view
@@ -143,8 +146,11 @@ let int64 = make_ Int64
 let nativeint = make_ Nativeint
 let float = make_ Float
 let unit = make_ Unit
+let char = make_ Char
 let lazy_ x = make_ (Lazy x)
 
+let string = make_ String
+let bytes = make_ Bytes
 let list x = make_ (List x)
 let array x = make_ (Array x)
 
@@ -253,11 +259,14 @@ let rec print : type a. a ty -> fmt -> a -> unit
   | Int64 -> Format.fprintf out "%Li" x
   | Nativeint -> Format.fprintf out "%ni" x
   | Float -> Format.fprintf out "%F" x
+  | Char -> Format.fprintf out "%c" x
   | Option ty ->
       begin match x with
       | Some y -> Format.fprintf out "@[<hov>Some (@,%a)@]" (print ty) y
       | None -> Format.fprintf out "None"
       end
+  | String -> Format.fprintf out "%S" x
+  | Bytes -> Format.fprintf out "%S" x (* TODO: use Bytes? *)
   | List ty ->
       Format.fprintf out "@[<hov>[%a]@]" (pp_list ~sep:"; " (print ty)) x
   | Array ty ->

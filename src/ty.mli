@@ -18,7 +18,10 @@ type 'a view =
   | Int64 : int64 view
   | Nativeint : nativeint view
   | Float : float view
+  | Char : char view
   | Option : 'a ty -> 'a option view
+  | String : string view
+  | Bytes : bytes view
   | List : 'a ty -> 'a list view
   | Array : 'a ty -> 'a array view
   | Sum : ('s, 'v) sum -> 's view
@@ -110,7 +113,10 @@ val int64 : int64 ty
 val nativeint : nativeint ty
 val float : float ty
 val unit : unit ty
+val char : char ty
 val option : 'a ty -> 'a option ty
+val string : string ty
+val bytes : bytes ty
 val list : 'a ty -> 'a list ty
 val array : 'a ty -> 'a array ty
 val lazy_ : 'a ty -> 'a Lazy.t ty

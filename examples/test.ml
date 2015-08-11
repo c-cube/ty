@@ -39,6 +39,25 @@ let ty_point = Ty.(
   }
 )
 
+type 'a myoption =
+  | MySome of 'a
+  | MyNone
+
+let myoption x = Ty.(mk_sum {
+  sum_name="myoption";
+  sum_variants= (
+    let v_none = mk_variant "MyNone" ~args:TNil ~make:(fun HNil -> MyNone) in
+    let v_some = mk_variant "MySome" ~args:(TCons (x, TNil))
+      ~make:(fun (HCons (x, HNil)) -> MySome x)
+    in
+    VCons (v_none, VCons (v_some, VNil))
+  );
+  sum_match=fun (VM_cons (f_none, VM_cons (f_some, VM_nil))) v ->
+    match v with
+    | MyNone -> f_none HNil
+    | MySome x -> f_some (HCons (x, HNil))
+})
+
 type nat = O | S of nat
 
 let ty_nat =

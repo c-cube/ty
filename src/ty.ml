@@ -37,13 +37,19 @@ type 'a ty = {
 and 'a view =
   | Rec : 'a ty lazy_t -> 'a view
   | Unit : unit view
-  | Int : int view
   | Bool : bool view
+  | Int : int view
+  | Int32 : int32 view
+  | Int64 : int64 view
+  | Nativeint : nativeint view
+  | Float : float view
+  | Option : 'a ty -> 'a option view
   | List : 'a ty -> 'a list view
+  | Array : 'a ty -> 'a array view
   | Sum : ('s, 'v) sum -> 's view
   | Record : ('r, 'fields) record -> 'r view
   | Tuple : ('t, 'a) tuple -> 't view
-  | Lazy : 'a ty -> 'a Lazy.t view
+  | Lazy : 'a ty -> 'a lazy_t view
   | Fun : 'a ty * 'b ty -> ('a -> 'b) view
 
 and 'a hlist =
@@ -130,12 +136,17 @@ let mk_variant name ~args ~make = {
 
 let make_ v = {id=Id.fresh(); view=v; }
 
-let int = make_ Int
 let bool = make_ Bool
+let int = make_ Int
+let int32 = make_ Int32
+let int64 = make_ Int64
+let nativeint = make_ Nativeint
+let float = make_ Float
 let unit = make_ Unit
 let lazy_ x = make_ (Lazy x)
 
 let list x = make_ (List x)
+let array x = make_ (Array x)
 
 let mk_sum s = { id=Id.fresh(); view=Sum s }
 let mk_record r = { id=Id.fresh(); view=Record r }
@@ -149,20 +160,7 @@ let mk_rec d =
   let rec ty = lazy { id=Id.fresh(); view=Rec (lazy (d (Lazy.force ty))); } in
   Lazy.force ty
 
-let option x = mk_sum {
-  sum_name="option";
-  sum_variants= (
-    let v_none = mk_variant "None" ~args:TNil ~make:(fun HNil -> None) in
-    let v_some = mk_variant "Some" ~args:(TCons (x, TNil))
-      ~make:(fun (HCons (x, HNil)) -> Some x)
-    in
-    VCons (v_none, VCons (v_some, VNil))
-  );
-  sum_match=fun (VM_cons (f_none, VM_cons (f_some, VM_nil))) v ->
-    match v with
-    | None -> f_none HNil
-    | Some x -> f_some (HCons (x, HNil))
-}
+let option x = make_ (Option x)
 
 let pair a b = mk_tuple {
   tuple_args=TCons (a, TCons (b, TNil));
@@ -249,9 +247,22 @@ let rec print : type a. a ty -> fmt -> a -> unit
   = fun ty out x -> match view ty with
   | Rec (lazy dty) -> print dty out x
   | Unit -> Format.fprintf out "()"
-  | Int -> Format.fprintf out "%d" x
   | Bool ->  Format.fprintf out "%B" x
-  | List ty -> Format.fprintf out "@[<hov>[%a]@]" (pp_list ~sep:"; " (print ty)) x
+  | Int -> Format.fprintf out "%d" x
+  | Int32 -> Format.fprintf out "%li" x
+  | Int64 -> Format.fprintf out "%Li" x
+  | Nativeint -> Format.fprintf out "%ni" x
+  | Float -> Format.fprintf out "%F" x
+  | Option ty ->
+      begin match x with
+      | Some y -> Format.fprintf out "@[<hov>Some (@,%a)@]" (print ty) y
+      | None -> Format.fprintf out "None"
+      end
+  | List ty ->
+      Format.fprintf out "@[<hov>[%a]@]" (pp_list ~sep:"; " (print ty)) x
+  | Array ty ->
+      Format.fprintf out "@[<hov>[|%a|]@]"
+        (pp_list ~sep:"; " (print ty)) (Array.to_list x)
   | Lazy ty -> Format.fprintf out "lazy %a" (print ty) (Lazy.force x)
   | Fun (_, _) -> Format.fprintf out "<fun>"
   | Tuple tup ->

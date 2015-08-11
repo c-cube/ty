@@ -12,13 +12,19 @@ type 'a ty
 type 'a view =
   | Rec : 'a ty lazy_t -> 'a view
   | Unit : unit view
-  | Int : int view
   | Bool : bool view
+  | Int : int view
+  | Int32 : int32 view
+  | Int64 : int64 view
+  | Nativeint : nativeint view
+  | Float : float view
+  | Option : 'a ty -> 'a option view
   | List : 'a ty -> 'a list view
+  | Array : 'a ty -> 'a array view
   | Sum : ('s, 'v) sum -> 's view
   | Record : ('r, 'fields) record -> 'r view
   | Tuple : ('t, 'a) tuple -> 't view
-  | Lazy : 'a ty -> 'a Lazy.t view
+  | Lazy : 'a ty -> 'a lazy_t view
   | Fun : 'a ty * 'b ty -> ('a -> 'b) view
 
 and 'a hlist =
@@ -88,18 +94,25 @@ val view : 'a ty -> 'a view
 (** Deconstruct the head of the ['a ty] *)
 
 val equal : 'a ty -> 'b ty -> ('a, 'b) maybe_eq
-(** Compare two dynamic types *)
+(** Compare two dynamic types {b nominally} (i.e. even if ['a] and
+    ['b] are structurally equal, ['a ty] and ['b ty] might not
+    be equal) *)
 
 (** {2 Helpers} *)
 
 val mk_field : ?set:('a -> 'r) -> string -> ty:'a ty -> get:('r -> 'a) -> ('r, 'a) field
 val mk_variant : string -> args:'a ty_list -> make:('a hlist -> 's) -> ('s, 'a) variant
 
-val int : int ty
 val bool : bool ty
+val int : int ty
+val int32 : int32 ty
+val int64 : int64 ty
+val nativeint : nativeint ty
+val float : float ty
 val unit : unit ty
 val option : 'a ty -> 'a option ty
 val list : 'a ty -> 'a list ty
+val array : 'a ty -> 'a array ty
 val lazy_ : 'a ty -> 'a Lazy.t ty
 val ref : 'a ty -> 'a ref ty
 

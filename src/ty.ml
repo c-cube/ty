@@ -16,21 +16,24 @@ type (_, _) maybe_eq =
   | NotEq : ('a, 'b) maybe_eq
 
 module Id : sig
-  type 'a t
-  val fresh : unit -> 'a t
-  val equal : 'a t -> 'b t -> ('a, 'b) maybe_eq
+  type t = private
+    | Structural
+    | Nominal of int
+  val fresh : unit -> t
+  val structural : t
 end = struct
-  type 'a t = int
+  type t =
+    | Structural
+    | Nominal of int
+  let structural = Structural  (* same ID for all structural types *)
   let fresh =
-    let r = ref 0 in
-    fun () -> incr r; !r
-  let equal : type a b. a t -> b t -> (a, b) maybe_eq =
-    fun i j -> if i=j then (Obj.magic Refl : (a, b) maybe_eq) else NotEq
+    let r = ref 1 in
+    fun () -> incr r; Nominal !r
 end
 
 (** Description of type ['a] *)
 type 'a ty = {
-  id: 'a Id.t;
+  id: Id.t;
   view: 'a view;
 }
 
@@ -110,7 +113,63 @@ and ('t, 'a) tuple = {
 
 let view a = a.view
 
-let equal a b = Id.equal a.id b.id
+external widen_refl_ : ('a, 'a) maybe_eq -> ('a, 'b) maybe_eq = "%identity"
+
+let rec equal : type a b. a ty -> b ty -> (a, b) maybe_eq
+  = fun a b ->
+  match a.id, b.id with
+  | Id.Nominal i, Id.Nominal j ->
+      if i=j then widen_refl_ Refl else NotEq
+  | Id.Nominal _, Id.Structural
+  | Id.Structural, Id.Nominal _ -> NotEq
+  | Id.Structural, Id.Structural ->
+      begin match a.view, b.view with
+      | Unit, Unit -> widen_refl_ Refl
+      | Unit, _ -> NotEq
+      | _, Unit -> NotEq
+      | Int, Int -> widen_refl_ Refl
+      | Int, _ -> NotEq
+      | _, Int -> NotEq
+      | Bool, Bool -> widen_refl_ Refl
+      | Bool, _ -> NotEq
+      | _, Bool -> NotEq
+      | List a1, List b1 ->
+          begin match equal a1 b1 with
+          | Refl -> Refl
+          | NotEq -> NotEq
+          end
+      | Sum _, _ -> NotEq
+      | _, Sum _ -> NotEq
+      | Record _, _ -> NotEq
+      | _, Record _ -> NotEq
+      | Tuple t1, Tuple t2 ->
+          begin match equal_l t1.tuple_args t2.tuple_args with
+          | Refl -> widen_refl_ Refl
+          | NotEq -> NotEq
+          end
+      | Lazy a1, Lazy b1 ->
+          begin match equal a1 b1 with
+          | Refl -> Refl
+          | NotEq -> NotEq
+          end
+      | Fun (a1, a2), Fun (b1, b2) ->
+          begin match equal a1 b1, equal a2 b2 with
+          | Refl, Refl -> Refl
+          | _ -> NotEq
+          end
+      end
+and equal_l : type a b. a ty_list -> b ty_list -> (a, b) maybe_eq
+  = fun l1 l2 -> match l1, l2 with
+  | TNil, TNil -> widen_refl_ Refl
+  | TNil, TCons _ -> NotEq
+  | TCons _, TNil -> NotEq
+  | TCons (x1, l1'), TCons (x2, l2') ->
+      match equal x1 x2 with
+      | NotEq -> NotEq
+      | Refl ->
+          match equal_l l1' l2' with
+          | NotEq -> NotEq
+          | Refl -> Refl
 
 (** {2 Helpers} *)
 
@@ -127,7 +186,7 @@ let mk_variant name ~args ~make = {
   variant_make=make;
 }
 
-let make_ v = {id=Id.fresh(); view=v; }
+let make_ v = {id=Id.structural(); view=v; }
 
 let int = make_ Int
 let bool = make_ Bool
@@ -138,7 +197,7 @@ let list x = make_ (List x)
 
 let mk_sum s = { id=Id.fresh(); view=Sum s }
 let mk_record r = { id=Id.fresh(); view=Record r }
-let mk_tuple t = { id=Id.fresh(); view=Tuple t }
+let mk_tuple t = { id=Id.structural(); view=Tuple t }
 
 let option x = mk_sum {
   sum_name="option";
